@@ -49,6 +49,48 @@ estimates, dangling references) and the thresholds used to decide when a file is
 ([`thresholds.md`](skills/unhobble/thresholds.md)). The thresholds were measured on one setup: override them
 for yours.
 
+## How it compares
+
+Several tools already slim or lint agent instructions. Claude Code's built-in `/doctor` is the closest: it
+trims checked-in `CLAUDE.md` files by cutting what Claude could derive from the codebase, finds unused skills,
+MCP servers and plugins, and asks before changing anything. What unhobble adds on top:
+
+| | unhobble |
+|---|---|
+| **Scope** | One criterion across three targets: `CLAUDE.md`/rules, the *content* of skill directories, and harness config |
+| **Every cut is accountable** | Each proposed cut must answer *"what guarantees this behaviour now?"* A row with no answer is not a cut |
+| **Staleness, not just length** | Every number, path and count is re-tested before judging; a stale rule is treated as worse than a long one |
+| **Verifies the edit, not only the result** | Two-direction read-back: every cut is gone **and** every keep is still there, item by item |
+| **Skill mode has a veto** | Runs the skill's existing tests or evals before and after; a lower pass count blocks the change (after first confirming the check actually runs) |
+| **Harness mode never edits** | Ranks plugins, MCP servers and agents by resident size × real usage counted from transcripts, then only proposes |
+| **Measurement traps are written down** | `paths:` rule files cost per load, not per file; memory indexes cap on characters, not bytes; a harness warning is not the cap; plus the failure modes hit while building it |
+
+### When to use something else
+
+- **A quick built-in pass on `CLAUDE.md` and unused extensions:** [`/doctor`](https://code.claude.com/docs/en/commands).
+- **A CI gate or deterministic fact checks:** [agents-lint](https://github.com/giacomo/agents-lint) verifies that
+  referenced paths exist and `npm run` scripts are in `package.json`, with CI exit codes. unhobble's re-verification
+  is done by the model: slower, costs tokens, and it is user-invoked by design.
+- **Many agent formats at once** (Cursor, Copilot, Windsurf, Gemini…): [ctxlint](https://github.com/YawLabs/ctxlint)
+  covers 16 formats and flags staleness from git history. unhobble is built around Claude Code's files
+  (`CLAUDE.md`, rules, skills, `settings.json`).
+- **A skill that doesn't trigger reliably:** Anthropic's
+  [skill-creator](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/skill-creator) optimizes
+  descriptions against trigger evals. unhobble cuts content; it does not tune triggering.
+- **Adding missing guidance rather than cutting:**
+  [claude-md-management](https://github.com/anthropics/claude-plugins-official/tree/main/plugins/claude-md-management)
+  audits `CLAUDE.md` against the codebase and captures session learnings. unhobble subtracts: it deletes, merges
+  duplicates behind a pointer and fixes stale facts, but never looks for what is missing.
+- **`CLAUDE.md` only, rewriting blocks into on-demand pointers:**
+  [skill-claudemd](https://github.com/qiaeru/skill-claudemd) verifies each kept command, path and pointer and ships
+  eval cases.
+- **Content you don't keep in files** (tool output, retrieved text): runtime prompt compression such as
+  [LLMLingua](https://github.com/microsoft/LLMLingua). unhobble edits versioned files once; it does nothing at
+  inference time.
+
+> Descriptions of other tools are based on their documentation and READMEs as of September 2026. They change;
+> corrections are welcome.
+
 ## Install
 
 ### Option A: plugin (recommended)
@@ -73,6 +115,8 @@ cp -R unhobble/skills/unhobble ~/.claude/skills/unhobble
 Invoke with `/unhobble <target>`.
 
 ## Usage
+
+Examples use the manual-install name; with the plugin, type `/unhobble:unhobble` instead.
 
 ```
 /unhobble ~/.claude/CLAUDE.md
