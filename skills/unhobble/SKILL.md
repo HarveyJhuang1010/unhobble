@@ -49,10 +49,19 @@ Four corollaries:
    confidently wrong. `measure.py facts` checks imports, paths and commands
    deterministically; spend your own judgment on what it cannot check.
 3. Apply the criterion above.
-4. **Propose once.** A table of cuts, each row carrying bytes, reason, and the answer to
-   *"what guarantees this now?"* A row with no answer is not a cut. Deleting whole
-   clauses needs this confirmation; fixing a stale fact does not. Wait for one
-   confirmation.
+4. **Propose once.** A table of cuts, each row carrying an action, bytes, reason, and the
+   answer to *"what guarantees this now?"* A row with no answer is not a cut. Deleting
+   whole clauses needs this confirmation; fixing a stale fact does not. Wait for one
+   confirmation. Actions:
+   - `delete`: the criterion says default behaviour does not change.
+   - `merge`: keep one statement; the others become pointers to it.
+   - `move-on-demand`: into a `paths:` rule, a skill, or a file reached by a pointer line
+     that names the actions that should send you there. Never an `@import`: it loads
+     at launch and saves nothing.
+   - `fix-stale`: correct what step 2 disproved.
+   - `mechanize`: a hook enforces it from now on. Attach a working draft built from
+     `templates/pretooluse_hook.py`, tried against one violating and one allowed input,
+     plus its `settings.json` snippet. Draft only: the user installs it.
 5. Execute the whole table on that single confirmation.
 6. **Read back in both directions**: every cut is gone, **and** every keep is still
    there, item by item. Then scan the whole file for anything that pointed at what
@@ -68,8 +77,11 @@ Four corollaries:
   First confirm the check actually executes. An `evals.json` may be a human review
   checklist, not a test. If nothing runs, fall back to `rules`-mode verification
   (two-direction read-back) rather than pretending a baseline exists.
-- `harness`: rank by *resident bytes × how often you actually used it*, measured from
-  transcripts, not from opinion. Claude Code keeps them at
+- `harness`: rank by *resident cost × how often you actually used it*, measured from
+  transcripts, not from opinion. For plugins, take the cost from
+  `claude plugin details <plugin>@<marketplace>`, which reports projected always-on and
+  on-invoke tokens; bytes are a proxy with a unit trap of their own. It covers plugins
+  only, not `CLAUDE.md` or rules. Claude Code keeps them at
   `~/.claude/projects/<project>/*.jsonl`; count invocations by name
   (`grep -l '"name":"Skill"'`, then grep the skill or tool name). Other harnesses keep
   transcripts elsewhere; if none are reachable, rank by resident bytes alone and label
