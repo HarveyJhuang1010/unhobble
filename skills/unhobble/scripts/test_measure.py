@@ -55,6 +55,15 @@ class ResidentLayer(TempDirCase):
         self.assertEqual(report.claude_md_bytes, 7)
         self.assertEqual(report.total, report.rules_total + 7)
 
+    def test_claude_md_imports_count_because_they_load_at_launch(self) -> None:
+        write(self.root, "CLAUDE.md", "see @big.md, not `@skip.md`\n")
+        write(self.root, "big.md", "b" * 40 + " @nested.md")  # 51 bytes
+        write(self.root, "nested.md", "@big.md")  # 7 bytes; cycles back, must not loop
+        write(self.root, "skip.md", "s" * 1000)
+        report = measure.resident(self.root)
+        self.assertEqual(report.import_bytes, 51 + 7)
+        self.assertEqual(report.total, report.claude_md_bytes + 51 + 7)
+
     def test_bytes_not_characters(self) -> None:
         write(self.root, "rules/cjk.md", "中文")  # 2 characters, 6 bytes
         self.assertEqual(dict(measure.resident(self.root).files), {"cjk.md": 6})
@@ -71,6 +80,13 @@ class PerLoad(TempDirCase):
         # column 0 must not end the list.
         write(rules, "noise.md", '---\npaths:\n  # "**/*.py" was removed\n# "**/*.rb" too\n  - "docs/**"\n---\n')
         write(rules, "always.md", "resident, not path-scoped")
+        write(rules, "dotgh.md", '---\npaths:\n  - ".github/**"\n---\n')
+        write(rules, "inline.md", "---\npaths: lib/*.go\n---\n")
+        write(rules, "flow.md", "---\npaths: [cmd/*.rs, bin/*.rs]\n---\n")
+        write(rules, "commented.md", '---\npaths:\n  - "**/*.sql"  # migrations\n---\n')
+        write(rules, "bare.md", "---\npaths:\n  - bin/*.sh  # scripts\n---\n")
+        write(rules, "neg.md", '---\npaths:\n  - "notes/[!a]*.txt"\n---\n')
+        write(rules, "weird.md", '---\npaths:\n  - "weird/[.md"\n---\n')
         self.rules = rules
 
     def names(self, sample: str) -> set[str]:
@@ -94,6 +110,23 @@ class PerLoad(TempDirCase):
     def test_list_continues_past_a_column_zero_comment(self) -> None:
         self.assertEqual(self.names("docs/guide.md"), {"noise.md"})
 
+    def test_dot_prefixed_paths_keep_their_dot(self) -> None:
+        self.assertEqual(self.names(".github/workflows/ci.yml"), {"dotgh.md"})
+        self.assertEqual(self.names("./.github/workflows/ci.yml"), {"dotgh.md"})
+
+    def test_unquoted_inline_and_flow_forms(self) -> None:
+        self.assertEqual(self.names("lib/a.go"), {"go.md", "inline.md"})
+        self.assertEqual(self.names("bin/x.rs"), {"flow.md"})
+
+    def test_trailing_comment_on_a_list_item(self) -> None:
+        self.assertEqual(self.names("db/001.sql"), {"commented.md"})
+        self.assertEqual(self.names("bin/run.sh"), {"bare.md"})
+
+    def test_negated_and_unterminated_character_classes(self) -> None:
+        self.assertEqual(self.names("notes/b.txt"), {"neg.md"})
+        self.assertEqual(self.names("notes/a.txt"), set())
+        self.assertEqual(self.names("weird/[.md"), {"weird.md"})
+
     def test_reports_bytes_per_matched_file(self) -> None:
         sizes = dict(measure.matching_rules(self.rules, "main.go"))
         self.assertEqual(sizes["go.md"], (self.rules / "go.md").stat().st_size)
@@ -104,7 +137,7 @@ class MemoryIndex(unittest.TestCase):
         report = measure.memory_index("- x\n" * 250)
         self.assertEqual(report.lines, 250)
         self.assertEqual(report.loaded_by_lines, 200)
-        self.assertEqual(report.loaded_lines, 200)
+        self.assertEqual(report.agreed_lines, None)  # bytes/chars say all 250 load
 
     def test_character_and_byte_cuts_differ_for_cjk(self) -> None:
         line = "中" * 99 + "\n"  # 100 characters, 298 bytes
@@ -114,11 +147,12 @@ class MemoryIndex(unittest.TestCase):
         self.assertEqual(report.loaded_by_lines, 150)
         self.assertEqual(report.loaded_by_bytes, 25_000 // 298)
         self.assertEqual(report.loaded_by_chars, 150)
-        self.assertEqual(report.loaded_lines, 25_000 // 298)
+        # The limits disagree; only a real session can say which one cuts.
+        self.assertEqual(report.agreed_lines, None)
 
     def test_everything_loads_when_under_all_limits(self) -> None:
         report = measure.memory_index("- a\n- b\n")
-        self.assertEqual(report.loaded_lines, 2)
+        self.assertEqual(report.agreed_lines, 2)
 
 
 class Facts(TempDirCase):
@@ -169,6 +203,39 @@ class Facts(TempDirCase):
         self.assertTrue(commands["wc"])
         for skipped in ("cd", "+", "continued-line-is-not-a-command", "inside_heredoc_is_not_a_command"):
             self.assertNotIn(skipped, commands)
+
+    def test_import_resolves_relative_to_the_importing_file_only(self) -> None:
+        write(self.root, "docs/a.md", "only at the root")
+        target = write(self.root, "sub/CLAUDE.md", "See @docs/a.md")
+        self.assertEqual(dict(measure.facts(target, self.root).imports), {"docs/a.md": False})
+
+    def test_model_ids_ending_in_a_single_digit(self) -> None:
+        target = write(self.root, "CLAUDE.md", "Use claude-opus-4 or claude-sonnet-4-5.")
+        self.assertEqual(measure.facts(target, self.root).models, ("claude-opus-4", "claude-sonnet-4-5"))
+
+    def test_heredoc_lookalikes_and_command_prefixes(self) -> None:
+        target = write(
+            self.root,
+            "CLAUDE.md",
+            "\n".join(
+                [
+                    "```bash",
+                    "grep -c x <<< foo",
+                    "after-here-string",
+                    "x=$((1<<2))",
+                    "after-shift",
+                    "time git status",
+                    "sudo -u root apt-get-xyz install y",
+                    "if test-thing-xyz; then echo ok; fi",
+                    "```",
+                ]
+            ),
+        )
+        commands = dict(measure.facts(target, self.root).commands)
+        for name in ("grep", "after-here-string", "after-shift", "git", "apt-get-xyz", "test-thing-xyz"):
+            self.assertIn(name, commands)
+        for name in ("time", "sudo", "root", "if"):
+            self.assertNotIn(name, commands)
 
 
 if __name__ == "__main__":

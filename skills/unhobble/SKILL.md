@@ -60,9 +60,12 @@ Four corollaries:
      at launch and saves nothing.
    - `fix-stale`: correct what step 2 disproved.
    - `mechanize`: a hook enforces it from now on. Attach a working draft built from
-     `templates/pretooluse_hook.py`, tried against one violating and one allowed input,
-     plus its `settings.json` snippet. Draft only: the user installs it.
-5. Execute the whole table on that single confirmation.
+     `${CLAUDE_SKILL_DIR}/templates/pretooluse_hook.py`, with its test file adapted to
+     at least one violating and one allowed input, plus the `settings.json` snippet.
+     Draft only: the user installs it.
+5. Execute the whole table on that single confirmation, except the prose of a
+   `mechanize` row: it stays until the user says the hook is installed, because until
+   then nothing guarantees it.
 6. **Read back in both directions**: every cut is gone, **and** every keep is still
    there, item by item. Then scan the whole file for anything that pointed at what
    you removed.
@@ -78,15 +81,15 @@ Four corollaries:
   checklist, not a test. If nothing runs, fall back to `rules`-mode verification
   (two-direction read-back) rather than pretending a baseline exists.
 - `harness`: rank by *resident cost × how often you actually used it*, measured from
-  transcripts, not from opinion. For plugins, take the cost from
-  `claude plugin details <plugin>@<marketplace>`, which reports projected always-on and
-  on-invoke tokens; bytes are a proxy with a unit trap of their own. It covers plugins
-  only, not `CLAUDE.md` or rules. Claude Code keeps them at
+  transcripts, not from opinion. Claude Code keeps transcripts at
   `~/.claude/projects/<project>/*.jsonl`; count invocations by name
   (`grep -l '"name":"Skill"'`, then grep the skill or tool name). Other harnesses keep
-  transcripts elsewhere; if none are reachable, rank by resident bytes alone and label
-  the usage column as unmeasured. This mode proposes only: it edits no
-  `settings.json`, disables no plugin, and suggests no install. It subtracts and
+  transcripts elsewhere; if none are reachable, rank by resident cost alone and label
+  the usage column as unmeasured. For a plugin's cost, use
+  `claude plugin details <plugin>@<marketplace>`, which reports projected always-on and
+  on-invoke tokens; bytes are a proxy with a unit trap of their own. It covers plugins
+  only, not `CLAUDE.md` or rules. This mode proposes only: it edits no
+  `settings.json`, disables no plugin, and suggests no plugin install. It subtracts and
   mechanises.
 
 ## Exit criteria

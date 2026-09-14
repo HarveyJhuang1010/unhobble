@@ -69,7 +69,7 @@ MCP servers and plugins, and asks before changing anything. What unhobble adds o
 | **Harness mode never edits** | Ranks plugins, MCP servers and agents by resident size × real usage counted from transcripts, then only proposes |
 | **Measurement is a tested script** | Resident bytes, per-load cost of path-scoped rules, memory-index cuts, and `@import`/path/command checks come from `measure.py`, not retyped pipelines; its self-test runs first |
 | **Rules can become hooks** | A `mechanize` row ships a PreToolUse hook draft tried against a violating and an allowed input |
-| **Measurement traps are written down** | `paths:` rule files cost per load, not per file; memory indexes cap on characters, not bytes; a harness warning is not the cap; plus the failure modes hit while building it |
+| **Measurement traps are written down** | `paths:` rule files cost per load, not per file; a memory index has several cuts in different units (lines, bytes, characters); a harness warning is not the cap; plus the failure modes hit while building it |
 
 ### When to use something else
 

@@ -23,7 +23,8 @@ RESIDENT_FILE_LIMIT = 12_000
 LOAD_LIMIT = 30_000
 MEMORY_LINE_LIMIT = 200  # documented
 MEMORY_BYTE_LIMIT = 25_000  # documented as "25KB"
-MEMORY_CHAR_LIMIT = 24_985  # measured: the cut fell at this many characters
+MEMORY_CHAR_LIMIT = 24_985  # measured once: a real cut fell at this many characters
+IMPORT_DEPTH = 4  # documented: imports may nest four hops
 
 # ---------------------------------------------------------------- frontmatter
 
@@ -38,22 +39,36 @@ def frontmatter(text: str) -> list[str] | None:
     return None
 
 
+def unquote(value: str) -> str:
+    """One YAML scalar: quoted content, or bare text up to a trailing comment."""
+    value = value.strip()
+    quoted = re.match(r"""^(["'])(.*?)\1""", value)
+    return quoted.group(2) if quoted else re.split(r"\s+#", value, maxsplit=1)[0].strip()
+
+
+def inline_patterns(value: str) -> list[str]:
+    """`paths: glob`, `paths: "glob"` or `paths: [a, "b"]`."""
+    value = value.strip()
+    if not value.startswith("["):
+        return [unquote(value)] if value else []
+    body = re.split(r"\]\s*(?:#.*)?$", value[1:], maxsplit=1)[0]
+    return [unquote(item) for item in body.split(",")]
+
+
 def path_patterns(text: str) -> tuple[str, ...]:
     """The `paths:` globs of a rule file; empty when it has none (= resident)."""
-    fm = frontmatter(text) or []
     patterns: list[str] = []
     in_paths = False
-    for line in fm:
+    for line in frontmatter(text) or []:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         key = re.match(r"^paths:\s*(.*)$", line)
         if key:
             in_paths = True
-            patterns.extend(re.findall(r"""["']([^"']+)["']""", key.group(1)))
-            continue
-        if in_paths and re.match(r"^\s*-\s*", line):
-            patterns.append(re.sub(r"^\s*-\s*", "", line).strip().strip("\"'"))
+            patterns.extend(inline_patterns(key.group(1)))
+        elif in_paths and stripped.startswith("-"):
+            patterns.append(unquote(stripped[1:]))
         elif not line.startswith((" ", "\t")):
             in_paths = False
     return tuple(p for p in patterns if p)
@@ -66,6 +81,7 @@ def path_patterns(text: str) -> tuple[str, ...]:
 class ResidentReport:
     files: tuple[tuple[str, int], ...]
     claude_md_bytes: int
+    import_bytes: int  # files CLAUDE.md pulls in with @path, which load at launch too
 
     @property
     def rules_total(self) -> int:
@@ -73,7 +89,7 @@ class ResidentReport:
 
     @property
     def total(self) -> int:
-        return self.rules_total + self.claude_md_bytes
+        return self.rules_total + self.claude_md_bytes + self.import_bytes
 
 
 def rule_files(rules_dir: Path) -> list[Path]:
@@ -90,7 +106,33 @@ def resident(base: Path, claude_md: Path | None = None) -> ResidentReport:
         if not path_patterns(p.read_text(encoding="utf-8"))
     )
     md = claude_md if claude_md is not None else base / "CLAUDE.md"
-    return ResidentReport(files, md.stat().st_size if md.is_file() else 0)
+    if not md.is_file():
+        return ResidentReport(files, 0, 0)
+    return ResidentReport(files, md.stat().st_size, sum(p.stat().st_size for p in imported_files(md)))
+
+
+def import_refs(file: Path) -> list[str]:
+    prose, _ = split_fences(file.read_text(encoding="utf-8"))
+    return unique(IMPORT.findall(re.sub(r"`[^`\n]+`", " ", "\n".join(prose))))
+
+
+def import_path(ref: str, file: Path) -> Path:
+    """Imports resolve relative to the importing file, never the working directory."""
+    return Path(ref).expanduser() if ref.startswith(("~", "/")) else file.parent / ref
+
+
+def imported_files(root_file: Path) -> list[Path]:
+    """Every existing file reachable through @imports, each once, up to IMPORT_DEPTH hops."""
+    seen = {root_file.resolve()}
+    found: list[Path] = []
+    frontier = [root_file]
+    for _ in range(IMPORT_DEPTH):
+        targets = (import_path(ref, f) for f in frontier for ref in import_refs(f))
+        fresh = {t.resolve(): t for t in targets if t.is_file() and t.resolve() not in seen}
+        seen.update(fresh)
+        frontier = list(fresh.values())
+        found.extend(frontier)
+    return found
 
 
 # ------------------------------------------------------------------- per load
@@ -119,14 +161,29 @@ def glob_regex(pattern: str) -> re.Pattern[str]:
         elif pattern[i] == "?":
             out.append("[^/]")
             i += 1
-        elif pattern[i] == "[" and "]" in pattern[i + 1 :]:
-            end = pattern.index("]", i + 1)
-            out.append(pattern[i : end + 1])
-            i = end + 1
+        elif pattern[i] == "[":
+            end = class_end(pattern, i)
+            out.append(re.escape("[") if end is None else class_regex(pattern[i + 1 : end]))
+            i = i + 1 if end is None else end + 1
         else:
             out.append(re.escape(pattern[i]))
             i += 1
     return re.compile("".join(out))
+
+
+def class_end(pattern: str, start: int) -> int | None:
+    """Index of the `]` closing the class at `start`; a leading `]` is literal."""
+    j = start + 1
+    j += 1 if pattern[j : j + 1] in ("!", "^") else 0
+    j += 1 if pattern[j : j + 1] == "]" else 0
+    end = pattern.find("]", j)
+    return None if end < 0 else end
+
+
+def class_regex(body: str) -> str:
+    negated = body[:1] in ("!", "^")
+    chars = body[1:] if negated else body
+    return "[" + ("^" if negated else "") + "".join(c if c == "-" else re.escape(c) for c in chars) + "]"
 
 
 def matches(pattern: str, sample: str) -> bool:
@@ -134,7 +191,7 @@ def matches(pattern: str, sample: str) -> bool:
 
 
 def matching_rules(rules_dir: Path, sample: str) -> tuple[tuple[str, int], ...]:
-    sample = sample.lstrip("./")
+    sample = re.sub(r"^(?:\./)+", "", sample)
     return tuple(
         (p.relative_to(rules_dir).as_posix(), p.stat().st_size)
         for p in rule_files(rules_dir)
@@ -155,8 +212,10 @@ class MemoryReport:
     loaded_by_chars: int
 
     @property
-    def loaded_lines(self) -> int:
-        return min(self.loaded_by_lines, self.loaded_by_bytes, self.loaded_by_chars)
+    def agreed_lines(self) -> int | None:
+        """Lines that load when every limit agrees; None when only a real session can tell."""
+        counts = {self.loaded_by_lines, self.loaded_by_bytes, self.loaded_by_chars}
+        return counts.pop() if len(counts) == 1 else None
 
 
 def lines_within(sizes: list[int], limit: int) -> int:
@@ -184,13 +243,17 @@ def memory_index(text: str) -> MemoryReport:
 
 FENCE = re.compile(r"^(`{3,}|~{3,})\s*(\S*)")
 IMPORT = re.compile(r"(?<![\w@`])@(~?[\w./-]*[\w/])")
-MODEL = re.compile(r"\bclaude-[a-z0-9.-]*\d[a-z0-9.-]*[a-z0-9]")
+MODEL = re.compile(r"\bclaude-[a-z0-9.-]*\d(?:[a-z0-9.-]*[a-z0-9])?")
+HEREDOC = re.compile(r"""(?<![<(\d])<<(?!<)-?\s*['"]?([A-Za-z_]\w*)['"]?""")
 SHELL_LANGS = {"bash", "sh", "shell", "zsh", "console"}
 NOT_COMMANDS = {
-    "cd", "export", "source", ".", "for", "while", "until", "if", "then", "else", "elif",
-    "fi", "do", "done", "case", "esac", "in", "function", "return", "exit", "set", "unset",
-    "local", "read", "true", "false", "echo", "printf", "test", "[", "[[", "time", "exec",
+    "cd", "export", "source", ".", "for", "fi", "done", "case", "esac", "in", "function",
+    "return", "exit", "set", "unset", "local", "read", "true", "false", "echo", "printf",
+    "test", "[", "[[",
 }
+# Words that come before the command they run.
+PREFIXES = {"sudo", "time", "exec", "nohup", "command", "if", "then", "elif", "else", "while", "until", "do", "!"}
+SUDO_ARG_FLAGS = {"-u", "-g", "-h", "-p", "-C", "-D"}
 
 
 @dataclass(frozen=True)
@@ -223,6 +286,21 @@ def split_fences(text: str) -> tuple[list[str], list[list[str]]]:
     return prose, shell_blocks
 
 
+def first_command(segment: str) -> str | None:
+    tokens = segment.split()
+    i, after_sudo = 0, False
+    while i < len(tokens):
+        token = tokens[i]
+        if after_sudo and token.startswith("-"):
+            i += 2 if token in SUDO_ARG_FLAGS else 1
+        elif token in PREFIXES or re.match(r"^\w+=", token):
+            after_sudo = after_sudo or token == "sudo"
+            i += 1
+        else:
+            return token if re.match(r"^\w[\w.+-]*$", token) and token not in NOT_COMMANDS else None
+    return None
+
+
 def resolves(ref: str, file: Path, root: Path) -> bool:
     candidates = [Path(ref).expanduser()] if ref.startswith(("~", "/")) else [file.parent / ref, root / ref]
     return any(c.exists() for c in candidates)
@@ -244,13 +322,13 @@ def command_names(block: list[str]) -> list[str]:
         was_continued, continued = continued, line.endswith("\\")
         if was_continued or not line or line.startswith("#"):
             continue
-        marker = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", line)
+        marker = HEREDOC.search(line)
         heredoc = marker.group(1) if marker else None
         names.extend(re.findall(r"\$\((\w[\w.+-]*)", line))  # command substitution
         for segment in re.split(r"&&|\|\||;|\|", line.removeprefix("$ ")):
-            tokens = [t for t in segment.split() if not re.match(r"^\w+=", t) and t != "sudo"]
-            if tokens and re.match(r"^\w[\w.+-]*$", tokens[0]) and tokens[0] not in NOT_COMMANDS:
-                names.append(tokens[0])
+            name = first_command(segment)
+            if name:
+                names.append(name)
     return names
 
 
@@ -265,7 +343,7 @@ def facts(file: Path, root: Path) -> FactsReport:
         and not re.fullmatch(r"/[^/]*", s)  # `/help`, `/plugin:skill`: slash commands
     ]
     return FactsReport(
-        imports=tuple((ref, resolves(ref, file, root)) for ref in unique(IMPORT.findall(outside_spans))),
+        imports=tuple((ref, import_path(ref, file).exists()) for ref in unique(IMPORT.findall(outside_spans))),
         paths=tuple((ref, resolves(ref, file, root)) for ref in unique(path_refs)),
         models=tuple(unique(MODEL.findall(body))),
         commands=tuple(
@@ -288,6 +366,7 @@ def print_resident(args: argparse.Namespace) -> None:
         print(f"{size:>8,}  {name}  {'OVER ' + format(RESIDENT_FILE_LIMIT, ',') if size > RESIDENT_FILE_LIMIT else ''}")
     print(f"{report.rules_total:>8,}  resident rules ({len(report.files)} files)")
     print(f"{report.claude_md_bytes:>8,}  CLAUDE.md")
+    print(f"{report.import_bytes:>8,}  files CLAUDE.md @imports (load at launch; rule files' imports not counted)")
     print(f"{report.total:>8,}  resident total bytes  {flag(report.total, RESIDENT_TOTAL_LIMIT)}")
 
 
@@ -306,8 +385,12 @@ def print_memory(args: argparse.Namespace) -> None:
     print(f"  lines loaded under the {MEMORY_LINE_LIMIT}-line limit (documented): {r.loaded_by_lines:,}")
     print(f"  lines loaded under the {MEMORY_BYTE_LIMIT:,}-byte limit (documented as 25KB): {r.loaded_by_bytes:,}")
     print(f"  lines loaded under the {MEMORY_CHAR_LIMIT:,}-character limit (measured): {r.loaded_by_chars:,}")
-    lost = r.lines - r.loaded_lines
-    print(f"  => {r.loaded_lines:,} of {r.lines:,} lines load" + (f"; last {lost:,} never reach context" if lost else ""))
+    if r.agreed_lines is None:
+        print("  => the limits disagree. Find the real cut: compare the first and last injected lines in a fresh session.")
+    elif r.agreed_lines < r.lines:
+        print(f"  => every limit agrees: the last {r.lines - r.agreed_lines:,} lines never reach context")
+    else:
+        print(f"  => every limit agrees: all {r.lines:,} lines load")
 
 
 def print_facts(args: argparse.Namespace) -> None:
