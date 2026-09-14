@@ -44,7 +44,11 @@ Every run follows the same skeleton:
 6. Read back in both directions: the cuts are gone **and** the keeps are still there
 7. Commit with an exact pathspec
 
-The skill also ships the failure modes hit while building it (buggy measurement commands, inflated savings
+Each proposed row carries an action: `delete`, `merge`, `move-on-demand`, `fix-stale`, or `mechanize`, where
+`mechanize` comes with a working PreToolUse hook draft for you to install.
+
+Measurement and fact checks run through a bundled script, [`skills/unhobble/scripts/measure.py`](skills/unhobble/scripts/measure.py) (Python 3.9+, stdlib only), which
+ships with a self-test the skill runs before trusting any number. The skill also ships the failure modes hit while building it (buggy measurement commands, inflated savings
 estimates, dangling references) and the thresholds used to decide when a file is too big
 ([`thresholds.md`](skills/unhobble/thresholds.md)). The thresholds were measured on one setup: override them
 for yours.
@@ -63,6 +67,8 @@ MCP servers and plugins, and asks before changing anything. What unhobble adds o
 | **Verifies the edit, not only the result** | Two-direction read-back: every cut is gone **and** every keep is still there, item by item |
 | **Skill mode has a veto** | Runs the skill's existing tests or evals before and after; a lower pass count blocks the change (after first confirming the check actually runs) |
 | **Harness mode never edits** | Ranks plugins, MCP servers and agents by resident size × real usage counted from transcripts, then only proposes |
+| **Measurement is a tested script** | Resident bytes, per-load cost of path-scoped rules, memory-index cuts, and `@import`/path/command checks come from `measure.py`, not retyped pipelines; its self-test runs first |
+| **Rules can become hooks** | A `mechanize` row ships a PreToolUse hook draft tried against a violating and an allowed input |
 | **Measurement traps are written down** | `paths:` rule files cost per load, not per file; memory indexes cap on characters, not bytes; a harness warning is not the cap; plus the failure modes hit while building it |
 
 ### When to use something else

@@ -42,7 +42,11 @@ Claude Code 團隊砍掉了自己大部分的 prompt。unhobble 把這件事變�
 6. 雙向回讀：該刪的不見了，**而且**該留的都還在
 7. 用精確的 pathspec commit
 
-skill 內也收錄了製作過程中實際踩過的坑（量測指令本身有 bug、節省估計系統性偏高、刪欄位留下斷掉的引用），
+提案表的每一列都標明動作：`delete`（刪除）、`merge`（合併）、`move-on-demand`（改為按需載入）、`fix-stale`（修正過期事實）、
+`mechanize`（改由機制保證）。`mechanize` 會附一份可運作的 PreToolUse hook 草稿，由你決定是否安裝。
+
+量測與事實檢查由附帶的腳本 [`skills/unhobble/scripts/measure.py`](skills/unhobble/scripts/measure.py) 執行（Python 3.9 以上，只用標準函式庫），腳本附自測，
+skill 每次都先跑自測、通過才採信數字。skill 內也收錄了製作過程中實際踩過的坑（量測指令本身有 bug、節省估計系統性偏高、刪欄位留下斷掉的引用），
 以及判斷檔案是否過大的門檻（[`thresholds.md`](skills/unhobble/thresholds.md)）。門檻是在單一環境量測的，
 請依你的環境調整。
 
@@ -60,6 +64,8 @@ unhobble 在這之上多做的：
 | **驗證的是改動本身，不只是結果** | 雙向回讀：該刪的逐項確認不見了，**而且**該留的逐項確認還在 |
 | **skill 模式有否決權** | 改前改後都跑 skill 既有的測試或 evals，pass 數下降就不改（先確認檢查真的跑得起來） |
 | **harness 模式永不改檔** | 用「常駐大小 × transcript 裡實際使用次數」排序 plugin、MCP server、agent，只提案 |
+| **量測是經過測試的腳本** | 常駐位元組、按路徑觸發規則的單次載入量、memory 索引在哪裡被截斷、`@import`／路徑／指令是否存在，都由 `measure.py` 產出，不靠每次手打的指令；先跑自測 |
+| **規則可以變成 hook** | `mechanize` 列會附一份 PreToolUse hook 草稿，並用一個違規、一個合規的輸入試跑過 |
 | **把量測陷阱寫下來** | `paths:` 規則檔要按「一次載入多少」計、memory 索引的上限算字元不算位元組、harness 的警告不是上限；另附製作過程實際踩過的坑 |
 
 ### 這些情況用別的工具更合適

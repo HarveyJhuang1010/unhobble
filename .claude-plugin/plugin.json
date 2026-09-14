@@ -1,6 +1,6 @@
 {
   "name": "unhobble",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Slim a CLAUDE.md, rules directory, skill, or harness config for newer models. Measure, re-verify facts, propose once, then run through to commit.",
   "author": { "name": "HarveyJhuang1010" },
   "repository": "https://github.com/HarveyJhuang1010/unhobble",
