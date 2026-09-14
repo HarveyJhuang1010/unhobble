@@ -1,0 +1,14 @@
+{
+  "name": "unhobble",
+  "description": "A single-skill marketplace for unhobble: slim CLAUDE.md, rules, skills and harness config for newer models.",
+  "owner": {
+    "name": "HarveyJhuang1010"
+  },
+  "plugins": [
+    {
+      "name": "unhobble",
+      "source": "./",
+      "description": "Slim a CLAUDE.md, rules directory, skill, or harness config for newer models."
+    }
+  ]
+}
