@@ -8,7 +8,7 @@ Override them for yours; the *units* matter more than the numbers.
 | All `paths:` files loaded together when touching one file extension | > 30 KB | extract on-demand reference files (see below) |
 | A single resident rule file (**no** `paths:` frontmatter) | > 12 KB | split |
 | Resident layer total (resident rule files + `CLAUDE.md`) | > 35 KB | move domain-specific content behind `paths:` or into on-demand docs |
-| Auto-memory index (`MEMORY.md`) | > 24,985 **characters** | split it into a resident layer plus on-demand archive files (see below); trimming notes alone stops working well before this |
+| Auto-memory index (`MEMORY.md`) | whichever cuts first: 200 lines or 25KB (documented), 24,985 **characters** (measured) | split it into a resident layer plus on-demand archive files (see below); trimming notes alone stops working well before this |
 
 ## Units that lie
 
@@ -19,51 +19,44 @@ Override them for yours; the *units* matter more than the numbers.
   narrower situation, leaving a 3–5 line summary plus "read the full file when
   triggered" in place. The trigger is the `paths:` frontmatter, not the directory:
   a file moved into `refs/` without frontmatter is still resident.
-- **The memory index cap is characters, not bytes.** The runtime limit is a token cap
-  (≈ 25,000); CJK text is ~1.5× denser in bytes than in characters, so `wc -c` overstates
-  by that factor. Measure with `python3 -c "print(len(open('MEMORY.md').read()))"`.
-  Line counts never predict this at all: one 71-line index blew the cap.
+- **The memory index has more than one cut, in different units.** The docs say the first
+  200 lines or the first 25KB load, whichever comes first. One real truncation fell at
+  24,985 **characters** (a 71-line index, so the line limit was not what cut it). CJK text
+  is ~1.5× denser in bytes than in characters, so a CJK-heavy index can pass one reading
+  and fail the other. `measure.py memory` reports all three; when they disagree, find the
+  real cut by comparing the first and last injected lines in a fresh session.
+- **`@path` imports save nothing.** An imported file is expanded into context at launch
+  with the `CLAUDE.md` that imports it. Only a prose pointer ("read X before doing Y"),
+  a `paths:` rule or a skill actually defers loading.
 - **A harness warning is not the cap.** The memory-index hook warns at ~17 KB
   ("approaching"); the real ceiling is the row above. One session spent hours compressing
   toward the warning, believing it was the limit.
 
 ## Measurement commands
 
-Resident layer (files with no `paths:` frontmatter; recursive, because `refs/` files
-without frontmatter are resident too):
+Use the bundled script instead of retyping shell pipelines. Run its self-test first:
 
 ```bash
-cd ~/.claude && total=0
-for f in $(find rules -name '*.md' ! -name 'README.md'); do
-  head -1 "$f" | grep -q '^---$' || total=$((total + $(wc -c < "$f")))
-done
-echo "resident rules: $total bytes"; wc -c CLAUDE.md
+python3 ${CLAUDE_SKILL_DIR}/scripts/test_measure.py
+python3 ${CLAUDE_SKILL_DIR}/scripts/measure.py resident ~/.claude
+python3 ${CLAUDE_SKILL_DIR}/scripts/measure.py load ~/.claude/rules src/app/page.tsx internal/x.go
+python3 ${CLAUDE_SKILL_DIR}/scripts/measure.py memory ~/.claude/projects/<project>/memory/MEMORY.md
+python3 ${CLAUDE_SKILL_DIR}/scripts/measure.py facts CLAUDE.md --root .
 ```
 
-Per-extension load (upper bound: it cannot tell a narrow glob like
-`**/components/**/*.go` from `**/*.go`, so check each file's glob before acting):
+- `resident` counts every rule file without a `paths:` key, recursively. The shell version
+  this replaced skipped any file that merely *had* frontmatter, which is wrong: frontmatter
+  without `paths:` still loads at launch.
+- `load` takes a real file path and sums the path-scoped rules whose globs match it (brace
+  expansion and `**` included). The old per-extension grep was only an upper bound: it
+  could not tell `**/components/**/*.go` from `**/*.go`.
+- `facts` lists `@imports`, backticked paths and shell commands with whether each
+  resolves, and model IDs for you to judge. `MISSING` means "not found from the file's
+  directory or `--root`", not "wrong": a project-relative path mentioned in a user-level
+  file is expected to be missing there.
 
-```bash
-cd ~/.claude/rules
-for ext in go ts tsx py swift; do
-  total=0
-  for f in $(find . -name '*.md' ! -name 'README.md'); do
-    awk '/^paths:/{f=1;next} /^---$/{if(f)exit} f' "$f" | grep -E '^[[:space:]]*- ' \
-      | grep -q "\*\.$ext\"" && total=$((total + $(wc -c < "$f")))
-  done
-  echo ".$ext → $total bytes"
-done
-```
-
-Memory index, in characters:
-
-```bash
-python3 -c "import sys;print(len(open(sys.argv[1]).read()))" \
-  ~/.claude/projects/<project>/memory/MEMORY.md
-```
-
-Each of these has been wrong once (see the failure modes in `SKILL.md`). Sanity-check
-the output against one file you can count by hand before trusting the total.
+The script lists; it does not judge. Sanity-check one output against a file you can count
+by hand before acting on a total.
 
 ## When trimming stops working: the two-tier split
 

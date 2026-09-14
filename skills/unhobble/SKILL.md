@@ -41,10 +41,13 @@ Four corollaries:
 
 1. **Measure before reading.** Bytes per section, total against the thresholds in
    [`thresholds.md`](thresholds.md). Measuring first is what keeps step 3 honest:
-   reading it all and then judging produces opinions, not cuts.
+   reading it all and then judging produces opinions, not cuts. Use
+   `${CLAUDE_SKILL_DIR}/scripts/measure.py` after its `test_measure.py` passes; do not
+   retype shell pipelines.
 2. **Re-verify every fact.** Numbers, paths, counts, external state: test each one.
    Stale content beats verbose content for damage. It never errors; it just makes you
-   confidently wrong.
+   confidently wrong. `measure.py facts` checks imports, paths and commands
+   deterministically; spend your own judgment on what it cannot check.
 3. Apply the criterion above.
 4. **Propose once.** A table of cuts, each row carrying bytes, reason, and the answer to
    *"what guarantees this now?"* A row with no answer is not a cut. Deleting whole
@@ -95,7 +98,9 @@ mistakes already made while applying it.
   mixed into `grep -F`, a `tr -d` set that ate the dot, the wrong file scope, a `sed`
   range cut short by a semicolon inside a comment. **All four looked like broken
   content.** Before drawing a conclusion from a tool's output, confirm it measured what
-  you think it measured.
+  you think it measured. A fifth surfaced while porting them to `measure.py`: the
+  resident check skipped any file with frontmatter, not only files with `paths:`. That is
+  why the script ships with a self-test.
 - **Savings estimates run systematically high** (+33%, +33%, once −15%). The estimate
   targets a word count; compression that keeps the meaning stops short of it. **The
   proposal's number is an upper bound, not a promise.** Report the actual delta and
