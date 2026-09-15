@@ -18,6 +18,16 @@ your own setup.
 
 > Not affiliated with or endorsed by Anthropic or Boris Cherny.
 
+## The name
+
+The skill is called **Subaru**, after Natsuki Subaru, the protagonist of *Re:Zero − Starting Life in Another
+World*. His one power, Return by Death, sends him back to a checkpoint with everything he learned: each loop keeps
+the lessons and drops the moves that failed. That is what this skill does to your instructions. The project and
+the plugin keep the name *unhobble*, for what the skill does.
+
+> *Re:Zero* is a work by Tappei Nagatsuki. The name is a fan tribute; this project is not affiliated with its
+> rights holders.
+
 ## Results so far
 
 On the author's own Claude Code setup, most skills put through unhobble now run in **about half the time**.
@@ -47,10 +57,10 @@ Every run follows the same skeleton:
 Each proposed row carries an action: `delete`, `merge`, `move-on-demand`, `fix-stale`, or `mechanize`, where
 `mechanize` comes with a working PreToolUse hook draft for you to install.
 
-Measurement and fact checks run through a bundled script, [`skills/unhobble/scripts/measure.py`](skills/unhobble/scripts/measure.py) (Python 3.9+, stdlib only), which
+Measurement and fact checks run through a bundled script, [`skills/subaru/scripts/measure.py`](skills/subaru/scripts/measure.py) (Python 3.9+, stdlib only), which
 ships with a self-test the skill runs before trusting any number. The skill also ships the failure modes hit while building it (buggy measurement commands, inflated savings
 estimates, dangling references) and the thresholds used to decide when a file is too big
-([`thresholds.md`](skills/unhobble/thresholds.md)). The thresholds were measured on one setup: override them
+([`thresholds.md`](skills/subaru/thresholds.md)). The thresholds were measured on one setup: override them
 for yours.
 
 ## How it compares
@@ -108,27 +118,34 @@ In Claude Code:
 /plugin install unhobble@unhobble
 ```
 
-Invoke with `/unhobble:unhobble <target>`.
+Invoke with `/unhobble:subaru <target>`.
+
+Upgrading from 1.x, where the command was `/unhobble:unhobble`:
+
+```bash
+claude plugin marketplace update unhobble
+claude plugin update unhobble@unhobble
+```
 
 ### Option B: copy the skill
 
 ```bash
 git clone https://github.com/HarveyJhuang1010/unhobble.git
 mkdir -p ~/.claude/skills
-cp -R unhobble/skills/unhobble ~/.claude/skills/unhobble
+cp -R unhobble/skills/subaru ~/.claude/skills/subaru
 ```
 
-Invoke with `/unhobble <target>`.
+Invoke with `/subaru <target>`.
 
 ## Usage
 
-Examples use the manual-install name; with the plugin, type `/unhobble:unhobble` instead.
+Examples use the manual-install name; with the plugin, type `/unhobble:subaru` instead.
 
 ```
-/unhobble ~/.claude/CLAUDE.md
-/unhobble rules
-/unhobble skill ~/.claude/skills/my-skill
-/unhobble harness
+/subaru ~/.claude/CLAUDE.md
+/subaru rules
+/subaru skill ~/.claude/skills/my-skill
+/subaru harness
 ```
 
 The skill is user-invoked only (`disable-model-invocation: true`): Claude will never start it on its own, because

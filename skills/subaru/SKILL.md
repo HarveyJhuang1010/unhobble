@@ -1,11 +1,11 @@
 ---
-name: unhobble
+name: subaru
 description: Slim a CLAUDE.md, rules directory, skill, or harness config. Measure, re-verify facts, propose once, then run through to commit.
 argument-hint: "<path> | rules | skill | harness"
 disable-model-invocation: true
 ---
 
-# Unhobble
+# Subaru (unhobble)
 
 Remove what a newer model no longer needs, and machine-enforce what should never
 have been prose. Three modes, one skeleton.

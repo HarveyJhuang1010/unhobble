@@ -16,6 +16,14 @@ Claude Code 團隊砍掉了自己大部分的 prompt。unhobble 把這件事變�
 
 > 本專案與 Anthropic、Boris Cherny 無任何關聯，也未獲其背書。
 
+## 名字的由來
+
+這支 skill 叫 **Subaru**，取自《Re:從零開始的異世界生活》的主角菜月昴（486）。他唯一的能力「死亡回歸」會把他送回存檔點，
+並帶著所有學到的東西：每一輪都留下教訓、丟掉失敗的做法。這正是這支 skill 對你的指令做的事。
+專案與 plugin 仍叫 *unhobble*，說的是它做什麼。
+
+> 《Re:從零開始的異世界生活》為長月達平的作品。命名是粉絲致敬，本專案與版權方無任何關聯。
+
 ## 目前成效
 
 在作者自己的 Claude Code 環境中，經過 unhobble 瘦身的 skill，多數執行時間**減少約一半**。
@@ -45,9 +53,9 @@ Claude Code 團隊砍掉了自己大部分的 prompt。unhobble 把這件事變�
 提案表的每一列都標明動作：`delete`（刪除）、`merge`（合併）、`move-on-demand`（改為按需載入）、`fix-stale`（修正過期事實）、
 `mechanize`（改由機制保證）。`mechanize` 會附一份可運作的 PreToolUse hook 草稿，由你決定是否安裝。
 
-量測與事實檢查由附帶的腳本 [`skills/unhobble/scripts/measure.py`](skills/unhobble/scripts/measure.py) 執行（Python 3.9 以上，只用標準函式庫），腳本附自測，
+量測與事實檢查由附帶的腳本 [`skills/subaru/scripts/measure.py`](skills/subaru/scripts/measure.py) 執行（Python 3.9 以上，只用標準函式庫），腳本附自測，
 skill 每次都先跑自測、通過才採信數字。skill 內也收錄了製作過程中實際踩過的坑（量測指令本身有 bug、節省估計系統性偏高、刪欄位留下斷掉的引用），
-以及判斷檔案是否過大的門檻（[`thresholds.md`](skills/unhobble/thresholds.md)）。門檻是在單一環境量測的，
+以及判斷檔案是否過大的門檻（[`thresholds.md`](skills/subaru/thresholds.md)）。門檻是在單一環境量測的，
 請依你的環境調整。
 
 ## 和其他做法比較
@@ -102,27 +110,34 @@ unhobble 在這之上多做的：
 /plugin install unhobble@unhobble
 ```
 
-呼叫方式：`/unhobble:unhobble <對象>`
+呼叫方式：`/unhobble:subaru <對象>`
+
+從 1.x 升級（舊指令是 `/unhobble:unhobble`）：
+
+```bash
+claude plugin marketplace update unhobble
+claude plugin update unhobble@unhobble
+```
 
 ### 方式 B：直接複製 skill
 
 ```bash
 git clone https://github.com/HarveyJhuang1010/unhobble.git
 mkdir -p ~/.claude/skills
-cp -R unhobble/skills/unhobble ~/.claude/skills/unhobble
+cp -R unhobble/skills/subaru ~/.claude/skills/subaru
 ```
 
-呼叫方式：`/unhobble <對象>`
+呼叫方式：`/subaru <對象>`
 
 ## 使用範例
 
-以下範例用的是手動安裝的指令名；用 plugin 安裝的話，改打 `/unhobble:unhobble`。
+以下範例用的是手動安裝的指令名；用 plugin 安裝的話，改打 `/unhobble:subaru`。
 
 ```
-/unhobble ~/.claude/CLAUDE.md
-/unhobble rules
-/unhobble skill ~/.claude/skills/my-skill
-/unhobble harness
+/subaru ~/.claude/CLAUDE.md
+/subaru rules
+/subaru skill ~/.claude/skills/my-skill
+/subaru harness
 ```
 
 這支 skill 只能由使用者啟動（`disable-model-invocation: true`）：Claude 不會自己跑起來，
