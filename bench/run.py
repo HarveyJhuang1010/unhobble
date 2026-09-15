@@ -3,7 +3,7 @@
 
     run.py prepare --subject NAME                  clone the subject repo at its pinned commit
     run.py run --subject NAME --runs N [...]       interleaved runs, raw transcripts, results.jsonl
-    run.py summarize RESULTS_DIR                   medians, CIs, pass rates -> stdout + summary.md
+    run.py summarize RESULTS_DIR [DIR ... --out F] medians, CIs, pass rates -> stdout + summary.md (or F)
     run.py regrade RESULTS_DIR                     rerun every check on the archived workspaces
 
 The two variants differ in exactly one file: the skill's SKILL.md. Run
@@ -31,7 +31,7 @@ from grading import grade, transcript_fields
 from prep import GIT_ENV, Subject, git, load_subject, prepare, preflight, resolve_auth
 from proc import run_process, stream_process
 from regrade import regrade, regrade_preflight  # noqa: F401 - part of this module's interface
-from summary import read_rows, write_summary
+from summary import read_rows, write_combined, write_summary
 
 BENCH = Path(__file__).resolve().parent
 SUBJECTS = BENCH / "subjects"
@@ -341,7 +341,18 @@ def write_config(out_dir: Path, subject: Subject, *, model: str, runs: int, warm
 
 
 def cmd_summarize(args: argparse.Namespace) -> int:
-    print(write_summary(Path(args.results_dir)))
+    dirs = [Path(d) for d in args.results_dirs]
+    if len(dirs) == 1 and args.out is None:
+        print(write_summary(dirs[0]))
+        return 0
+    if args.out is None:
+        print("cannot summarize: pooling several results directories needs --out PATH", file=sys.stderr)
+        return 2
+    try:
+        print(write_combined(dirs, Path(args.out)))
+    except ValueError as error:
+        print(f"cannot summarize: {error}", file=sys.stderr)
+        return 2
     return 0
 
 
@@ -375,8 +386,10 @@ def main(argv: list[str]) -> int:
                    help="api-key: ANTHROPIC_API_KEY with --bare; oauth: CLAUDE_CODE_OAUTH_TOKEN (claude setup-token); "
                         "auto: whichever one is set")
     p.set_defaults(run=cmd_run)
-    p = sub.add_parser("summarize", help="summarise a results directory")
-    p.add_argument("results_dir")
+    p = sub.add_parser("summarize", help="summarise one results directory, or pool several with --out")
+    p.add_argument("results_dirs", nargs="+")
+    p.add_argument("--out", help="output file; required when pooling batches (they must share subject, commit, "
+                                 "model, auth, timeout and SKILL.md sizes)")
     p.set_defaults(run=cmd_summarize)
     p = sub.add_parser("regrade", help="rerun all checks on archived workspaces -> results.regraded.jsonl")
     p.add_argument("results_dir")

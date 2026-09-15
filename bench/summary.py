@@ -294,3 +294,31 @@ def write_summary(out_dir: Path, results: str = "results.jsonl", name: str = "su
     text = render(read_rows(out_dir / results), out_dir.name)
     (out_dir / name).write_text(text + "\n", encoding="utf-8")
     return text
+
+
+# Batches are pooled only if they measured the same thing; tool versions may drift and are noted.
+COMPARABLE_KEYS = ("subject", "repo", "commit", "model", "auth", "timeout", "skill_md_bytes")
+NOTED_KEYS = ("claude_version", "node_version", "npm_version")
+
+
+def combine(dirs: list[Path]) -> tuple[list[dict], list[str], list[str]]:
+    """Rows of several results directories, each tagged with its batch; plus notes and refusal reasons."""
+    configs = [json.loads((d / "config.json").read_text(encoding="utf-8")) for d in dirs]
+    errors = [f"batches differ in {key}: " + ", ".join(f"{d.name}={c.get(key)!r}" for d, c in zip(dirs, configs))
+              for key in COMPARABLE_KEYS if len({json.dumps(c.get(key), sort_keys=True) for c in configs}) > 1]
+    notes = [f"tool versions differ in {key}: " + ", ".join(f"{d.name}={c.get(key)}" for d, c in zip(dirs, configs))
+             for key in NOTED_KEYS if len({c.get(key) for c in configs}) > 1]
+    rows = [{**r, "batch": d.name} for d in dirs for r in read_rows(d / "results.jsonl")]
+    return rows, notes, errors
+
+
+def write_combined(dirs: list[Path], out: Path) -> str:
+    rows, notes, errors = combine(dirs)
+    if errors:
+        raise ValueError("; ".join(errors))
+    counts = ", ".join(f"{d.name} ({sum(r['batch'] == d.name for r in rows)} rows)" for d in dirs)
+    header = [f"Batches: {counts}"] + [f"Note: {n}" for n in notes] + [""]
+    title, rest = render(rows, " + ".join(d.name for d in dirs)).split("\n", 1)
+    text = "\n".join([title, ""] + header) + rest
+    out.write_text(text + "\n", encoding="utf-8")
+    return text

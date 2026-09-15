@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -268,6 +269,59 @@ class CostWithoutNoToolAnswers(unittest.TestCase):
     def test_no_caution_when_the_rates_match(self) -> None:
         rows = [row(1, "before", 100, hidden_pass=True), row(1, "after", 50, hidden_pass=True)]
         self.assertNotIn("Cost caution", summary.render(rows, "x"))
+
+
+class CombinedBatches(unittest.TestCase):
+    CONFIG = {"subject": "s", "repo": "r", "commit": "c", "model": "m", "auth": "oauth", "timeout": 900,
+              "skill_md_bytes": {"before": 16000, "after": 4000}, "claude_version": "2.1.272"}
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+
+    def batch(self, name: str, rows: list, **config) -> Path:
+        out = self.tmp / name
+        out.mkdir()
+        (out / "config.json").write_text(json.dumps({**self.CONFIG, **config}), encoding="utf-8")
+        (out / "results.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        return out
+
+    def test_rows_from_batches_that_measure_the_same_thing_are_pooled(self) -> None:
+        first = self.batch("b1", [row(1, "before", 100, hidden_pass=True), row(1, "after", 90, hidden_pass=True)])
+        second = self.batch("b2", [row(1, "before", 100, hidden_pass=False), row(1, "after", 90, hidden_pass=True)])
+        rows, notes, errors = summary.combine([first, second])
+        self.assertEqual((len(rows), notes, errors), (4, [], []))
+        self.assertEqual({r["batch"] for r in rows}, {"b1", "b2"})
+        text = summary.write_combined([first, second], self.tmp / "combined.md")
+        self.assertIn("50% (1/2)", text)
+        self.assertIn("Batches: b1 (2 rows), b2 (2 rows)", text)
+        self.assertEqual((self.tmp / "combined.md").read_text(encoding="utf-8"), text + "\n")
+
+    def test_batches_that_differ_in_what_they_measure_are_refused(self) -> None:
+        first = self.batch("b1", [row(1, "before", 100)])
+        second = self.batch("b2", [row(1, "before", 100)], model="other",
+                            skill_md_bytes={"before": 16000, "after": 5000})
+        _, _, errors = summary.combine([first, second])
+        self.assertEqual(len(errors), 2)
+        self.assertTrue(any("model" in e for e in errors) and any("skill_md_bytes" in e for e in errors))
+        with self.assertRaises(ValueError):
+            summary.write_combined([first, second], self.tmp / "combined.md")
+        self.assertFalse((self.tmp / "combined.md").exists())
+
+    def test_tool_version_differences_are_noted_not_refused(self) -> None:
+        first = self.batch("b1", [row(1, "before", 100)])
+        second = self.batch("b2", [row(1, "before", 100)], claude_version="2.1.280")
+        _, notes, errors = summary.combine([first, second])
+        self.assertEqual(errors, [])
+        self.assertIn("claude_version", notes[0])
+        self.assertIn("claude_version", summary.write_combined([first, second], self.tmp / "c.md"))
+
+    def test_the_cli_needs_an_output_path_to_combine(self) -> None:
+        first = self.batch("b1", [row(1, "before", 100)])
+        second = self.batch("b2", [row(1, "before", 100)])
+        self.assertEqual(run.main(["summarize", str(first), str(second)]), 2)
+        self.assertEqual(run.main(["summarize", str(first), str(second), "--out", str(self.tmp / "c.md")]), 0)
+        self.assertTrue((self.tmp / "c.md").exists())
 
 
 if __name__ == "__main__":
