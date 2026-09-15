@@ -376,18 +376,29 @@ evidence of a cost change.
 - `after/SKILL.md` is produced by unhobble but reviewed and accepted by a
   person before it is committed. The bench measures that reviewed file, not
   unhobble's raw output.
+- The model's Bash tool runs in the machine's login shell (zsh in the published
+  runs, where one `grep --include=*.*` failed on zsh globbing). Both variants
+  share it, so it does not favour either, but a rerun on another shell can differ.
+
+## Verified in the published runs (2026-09-15/16, `--auth oauth`)
+
+- The skill expands under `-p`: `first_turn_input_tokens` is 4,323 lower for
+  `after` (median, task 1) against an 11,772-byte smaller SKILL.md, in every
+  batch. `skill_loaded` stays `null` because the stream does not echo the
+  expansion; the token difference is the evidence.
+- All 86 runs had `env_isolated` true, `apiKeySource` `none`, the requested
+  model in the init event, no leak suspect and no exposed credential; no result
+  file or workspace archive contains an `sk-ant-` string.
 
 ## Not yet verified in a real run
 
 - `env_isolated` requires the init event's `mcp_servers` list and
-  `apiKeySource`. Both were seen in the oauth probe above; with `--auth api-key`
+  `apiKeySource`. Both were seen with `--auth oauth`; with `--auth api-key`
   (`--bare`) neither has been observed yet. Check the first api-key run's init
   event before trusting `env_isolated` there.
 - The exact result text of a spent subscription quota and of an expired token.
 - Whether `--disallowedTools "Read(//…/bench/**)"` takes effect, and whether it
-  also covers Grep and Glob.
-- Whether `/subject:test-driven-development <task>` under `-p` expands the skill
-  (check `first_turn_input_tokens` and `skill_loaded` on the smoke test).
+  also covers Grep and Glob: no published run tried to read the bench.
 
 ## Licence and attribution
 

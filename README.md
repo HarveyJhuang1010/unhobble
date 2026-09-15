@@ -30,8 +30,19 @@ the plugin keep the name *unhobble*, for what the skill does.
 
 ## Results so far
 
-On the author's own Claude Code setup, most skills put through unhobble now run in **about half the time**.
-That is a personal observation on one setup, not a controlled benchmark. Your numbers will differ.
+Measured in a controlled benchmark ([`bench/`](bench/); every number in [`bench/RESULTS.md`](bench/RESULTS.md)):
+a public TDD skill, [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) `test-driven-development`,
+in its original form and as slimmed by one unhobble run, on the same bug-fix tasks with Claude Sonnet 5.
+
+| | Result |
+|---|---|
+| `SKILL.md` size | 16,517 → 4,745 bytes (**−71%**) |
+| Cost per run | **−15%** on task 1 (30 runs per version) and **−7%** on task 2 (10 runs); both 95% CIs of the median difference exclude zero |
+| Quality | no statistically significant difference on any check: hidden tests, mutation tests, test-first order (closest: a fairness test was written in 3/30 runs vs 6/30, p = 0.47) |
+| Wall-clock time | no measurable difference |
+
+One skill, one model, two tasks: a result for this setup, not a guarantee for yours. Cost is Claude Code's
+estimate at API prices.
 
 ## What it does
 

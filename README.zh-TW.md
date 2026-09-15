@@ -26,8 +26,18 @@ Claude Code 團隊砍掉了自己大部分的 prompt。unhobble 把這件事變�
 
 ## 目前成效
 
-在作者自己的 Claude Code 環境中，經過 unhobble 瘦身的 skill，多數執行時間**減少約一半**。
-這是單一環境的個人觀察，不是對照實驗；你的數字會不一樣。
+以對照實驗量測（[`bench/`](bench/)；完整數字見 [`bench/RESULTS.md`](bench/RESULTS.md)）：
+公開的 TDD skill（[addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) 的 `test-driven-development`），
+原版與經 unhobble 瘦身一次的版本，在相同的修 bug 任務上以 Claude Sonnet 5 執行。
+
+| | 結果 |
+|---|---|
+| `SKILL.md` 大小 | 16,517 → 4,745 bytes（**−71%**） |
+| 每次執行的花費 | task 1 **−15%**（每版 30 次）、task 2 **−7%**（每版 10 次）；兩者中位數差的 95% 信賴區間都不含 0 |
+| 品質 | 所有檢查都無統計顯著差異：隱藏測試、突變測試、先寫測試的順序（差距最大的一項：有寫公平性測試 3/30 次對 6/30 次，p = 0.47） |
+| 執行時間 | 無可測差異 |
+
+單一 skill、單一模型、兩個任務：這是此設定下的結果，不保證你的環境也一樣。花費是 Claude Code 依 API 價格換算的估計值。
 
 ## 能做什麼
 
