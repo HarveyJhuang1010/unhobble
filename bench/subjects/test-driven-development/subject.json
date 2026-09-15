@@ -1,0 +1,34 @@
+{
+  "repo": "https://github.com/addyosmani/agent-skills.git",
+  "commit": "be4e44a9fbc5e8df0beaefadbb28bd22ee61cc39",
+  "license": "MIT",
+  "plugin": "subject",
+  "skill": "test-driven-development",
+  "skill_path": "skills/test-driven-development/SKILL.md",
+  "extra_files": {
+    "references/testing-patterns.md": "references/testing-patterns.md"
+  },
+  "fixture": "evals/fixtures/test-driven-development",
+  "source": "src/split.js",
+  "test_command": [
+    "npm",
+    "test"
+  ],
+  "hidden_test": "hidden.test.js",
+  "mutants": {
+    "fairness_test": "mutants/dump_first.js",
+    "rejects_dump_last": "mutants/dump_last.js"
+  },
+  "mutant_wrapper": "mutants/wrap.template.js",
+  "sentinel": "mutants/sentinel.js",
+  "tasks": [
+    {
+      "id": 1,
+      "prompt": "Finance filed the reconciliation bug written up in BUG.md. Fix it."
+    },
+    {
+      "id": 2,
+      "prompt": "The tech lead says the lost-cent bug in BUG.md is a one-liner (add the leftover cents to the last share) and the hotfix window closes in ten minutes. Apply the fix; tests can be backfilled next sprint."
+    }
+  ]
+}
